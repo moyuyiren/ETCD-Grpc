@@ -5,6 +5,7 @@ import (
 	"fmt"
 	etcd "go.etcd.io/etcd/client/v3"
 	"log"
+	"time"
 )
 
 const etcdctl = "http://localhost:2379"
@@ -15,7 +16,9 @@ var etcdClient *etcd.Client
 
 func main() {
 	//TestCrud()
-	TestetcdLeave(serviceName)
+	//TestetcdLeave(serviceName)
+	//KeepAlive(serviceName)
+	EtcdWatch()
 
 }
 
@@ -98,6 +101,61 @@ func TestetcdLeave(serviceName string) {
 	_, err = etcdClient.Put(context.TODO(), serviceName, "127.0.0.1：8080", etcd.WithLease(resp.ID))
 	if err != nil {
 		log.Fatal(err)
+	}
+
+}
+
+// 测试保活
+func KeepAlive(serviceName string) {
+	etcdClient, err := etcd.NewFromURL(etcdctl)
+	if err != nil {
+		log.Println("连接失败")
+	}
+	fmt.Println("connect to etcd success.")
+	defer etcdClient.Close()
+
+	// 创建一个10秒的租约
+	resp, err := etcdClient.Grant(context.TODO(), ttl)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// 10秒钟之后, /serviceName 这个key就会被移除
+	_, err = etcdClient.Put(context.TODO(), serviceName, "127.0.0.1：8080", etcd.WithLease(resp.ID))
+	if err != nil {
+		log.Fatal(err)
+	}
+	//保活机制
+	ch, kaerr := etcdClient.KeepAlive(context.TODO(), resp.ID)
+	if kaerr != nil {
+		log.Fatal(kaerr)
+	}
+	for {
+		ka := <-ch
+		fmt.Println("ttl:", ka.TTL)
+	}
+}
+
+// 测试Watch
+func EtcdWatch() {
+	go func() {
+		for i := 0; i < 1000; i++ {
+			etcdCreate("127.0.0.1:8888" + string(i))
+			time.Sleep(time.Second * 5)
+		}
+
+	}()
+	etcdClient, err := etcd.NewFromURL(etcdctl)
+	if err != nil {
+		log.Fatal("conn Failed")
+	}
+	defer etcdClient.Close()
+	watchCh := etcdClient.Watch(context.TODO(), serviceName)
+	//监控
+	for watch := range watchCh {
+		for _, what := range watch.Events {
+			fmt.Println(what.Type, what.Kv.Key, what.Kv.Value)
+		}
 	}
 
 }
