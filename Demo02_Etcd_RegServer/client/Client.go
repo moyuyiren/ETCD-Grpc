@@ -1,7 +1,7 @@
 package main
 
 import (
-	rpc "Etcd_Service_register/Demo02/server/proto"
+	rpc "Etcd_Service_register/Demo02_Etcd_RegServer/client/rpc"
 	"context"
 	"fmt"
 	etcd "go.etcd.io/etcd/client/v3"
